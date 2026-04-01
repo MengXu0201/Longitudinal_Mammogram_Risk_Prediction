@@ -30,7 +30,7 @@ def train_val_jointly(
     use_reg_loss,
     lambda_regu,
     lr_decay,
-    no_feat_Alignment,
+    no_feat_alignment,
 ):
     print("[INFO] Training the network...")
     start_time = time.time()
@@ -40,7 +40,7 @@ def train_val_jointly(
     logger.info(f"Number of Training Epochs: {num_epochs}")
 
     # Initialize model
-    model_cls = RiskModelNoAlignment if no_feat_Alignment == "True" else CombinedAlignmentRiskModel
+    model_cls = RiskModelNoAlignment if no_feat_alignment == "True" else CombinedAlignmentRiskModel
     model_risk = model_cls(num_years=5).to(device)
 
     optimizer = torch.optim.Adam(model_risk.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -52,8 +52,7 @@ def train_val_jointly(
             mode="max",
             factor=lr_decay,
             patience=patience_lr_scheduler,
-            verbose=True,
-        )
+         )
         print("Scheduler Initialized:", scheduler)
 
     # Initialize WandB
@@ -124,7 +123,7 @@ def train_val_jointly(
             del current_image, prior_image
 
             # Alignment loss
-            if no_feat_Alignment != "True":
+            if no_feat_alignment != "True":
                 aligned_prior = outputs["aligned_prior_feature"]
                 current_features = outputs["current_feature"]
                 prior_feature = outputs["prior_feature_before_alignment"]
@@ -144,7 +143,7 @@ def train_val_jointly(
             running["risk_loss"] += risk_loss.item()
 
             # Total loss
-            if no_feat_Alignment == "True":
+            if no_feat_alignment == "True":
                 total_loss = risk_loss
             else:
                 regu_loss = Loss_regu(outputs["deformation_field"].permute(0, 2, 3, 1)) if use_reg_loss == "True" else 0
@@ -216,7 +215,7 @@ def train_val_jointly(
                 del curr_img, prior_img
 
                 # Alignment Loss
-                if no_feat_Alignment != "True":
+                if no_feat_alignment != "True":
                     aligned_prior = outputs["aligned_prior_feature"]
                     current_feat = outputs["current_feature"]
                     prior_feat = outputs["prior_feature_before_alignment"]
@@ -236,7 +235,7 @@ def train_val_jointly(
                 risk_loss_total += risk_loss.item()
 
                 # Total loss
-                total_loss = risk_loss + (alignment_loss / 100) if no_feat_Alignment != "True" else risk_loss
+                total_loss = risk_loss + (alignment_loss / 100) if no_feat_alignment != "True" else risk_loss
                 valid_loss_total += total_loss.item()
 
                 # Store predictions and labels
@@ -367,7 +366,7 @@ def train_val_jointly_img_alignment(
     if use_scheduler == "True":
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="max", factor=lr_decay,
-            patience=patience_lr_scheduler, verbose=True
+            patience=patience_lr_scheduler
         )
         print("Scheduler initialized.")
 

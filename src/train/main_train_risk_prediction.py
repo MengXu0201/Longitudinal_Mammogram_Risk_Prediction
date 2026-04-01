@@ -20,7 +20,7 @@ def parse_arguments():
     parser.add_argument("--csv_file", type=str, required=True, help="Path to CSV file with dataset info")
     parser.add_argument("--data_root", type=str, required=True, help="Root directory of dataset images")
     parser.add_argument("--path_out_dir", type=str, required=True, help="Output directory for saving models and logs")
-    parser.add_argument("--id_training", type=int, required=True, help="Unique training run ID")
+    parser.add_argument("--id_training", type=str, required=True, help="Unique training run ID")
     parser.add_argument("--dataset", type=str, default="EMBED", help="Dataset to use (EMBED or CSAW)")
 
     # Training settings
@@ -28,7 +28,7 @@ def parse_arguments():
     parser.add_argument("--use_scheduler", type=str, required=True, help="Use learning rate scheduler if 'True'")
     parser.add_argument("--use_img_alignment", type=str, default="False", help="Enable image-level alignment if 'True'")
     parser.add_argument("--use_img_feat_alignment", type=str, default="False", help="Enable image-feature alignment if 'True'")
-    parser.add_argument("--no_feat_Alignment", type=str, default="False", help="Disable feature alignment if 'True'")
+    parser.add_argument("--no_feat_alignment", type=str, default="False", help="Disable feature alignment if 'True'")
     parser.add_argument("--use_reg_loss", type=str, default="False", help="Use regularization loss if 'True'")
     parser.add_argument("--lambda_regu", type=float, default=0.2, help="Weight for regularization loss")
 
@@ -160,7 +160,7 @@ def main():
             args.use_reg_loss,
             args.lambda_regu,
             args.lr_decay,
-            args.no_feat_Alignment,
+            args.no_feat_alignment,
         )
 
 if __name__ == "__main__":

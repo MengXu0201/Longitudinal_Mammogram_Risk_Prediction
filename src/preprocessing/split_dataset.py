@@ -7,8 +7,8 @@ from datetime import datetime
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-
-def split_data_and_copy_images_risk(
+# Original function for EMBED dataset
+def split_data_and_copy_images_risk_old(
     source_dir,
     train_dir,
     val_dir,
@@ -82,6 +82,154 @@ def split_data_and_copy_images_risk(
                 dest_path = os.path.join(target_dir, file)
                 shutil.copy(src_path, dest_path)
                 print(f"Copied {src_path} to {dest_path}")
+
+
+# New function for EMBED dataset. The dataset split is based on the group_split column, following the csaw dataset split.
+def split_data_and_copy_images_risk_embed(
+    csv_file,
+    source_dir,
+    train_dir,
+    val_dir,
+    test_dir,
+):
+    """
+    Copy PNG images into train, validation, and test directories based on a predefined
+    patient-level split specified in a CSV file that combines positive and negative cases.
+
+    This function scans all PNG images in `source_dir`, extracts the `patient_id`
+    from the filename, and groups images by patient. The CSV file must contain
+    a column named `split_group` indicating the dataset split assignment
+    ("train", "val", or "test") for each patient.
+
+    All images belonging to the same patient are copied into the same split
+    directory to avoid patient-level data leakage.
+
+    Expected PNG filename format:
+        patient_id_laterality_view_studydate_last4_status.png
+
+    Example:
+        12345678_L_CC_2018-05-01_4321_pos_cancer.png
+
+    Parameters
+    ----------
+    csv_file : str
+        Path to the CSV file containing at least the following columns:
+        - patient_id
+        - split_group ("train", "val", or "test")
+
+    source_dir : str
+        Directory containing all processed PNG mammogram images.
+
+    train_dir : str
+        Destination directory where training images will be copied.
+
+    val_dir : str
+        Destination directory where validation images will be copied.
+
+    test_dir : str
+        Destination directory where test images will be copied.
+
+    Notes
+    -----
+    - The function assumes that the first element of the PNG filename
+      (before the first underscore) corresponds to `patient_id`.
+    - If a patient appears in the image directory but not in the CSV file,
+      the images will be skipped.
+    - This function copies files rather than moving them, so the original
+      dataset in `source_dir` remains unchanged.
+    """
+
+    # make directories if they don't exist 
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(val_dir, exist_ok=True)
+    os.makedirs(test_dir, exist_ok=True)
+
+    df = pd.read_csv(csv_file, dtype={"patient_id": str})
+    df["patient_id"] = df["patient_id"].str.strip()
+    df["split_group"] = df["split_group"].str.strip().str.lower()
+
+    # patient_id -> split_group
+    patient_split = df.groupby("patient_id")["split_group"].first().to_dict()
+
+    filenames = [
+        f for f in os.listdir(source_dir)
+        if os.path.isfile(os.path.join(source_dir, f))
+    ]
+
+    patient_files = defaultdict(list)
+
+    for file in filenames:
+
+        parts = file.split("_")
+
+        if len(parts) < 6:
+            print(f"Skipping invalid file: {file}")
+            continue
+
+        patient_id = parts[0].strip()
+
+        patient_files[patient_id].append(file)
+
+    print(f"Total patients in images: {len(patient_files)}")
+
+    train_ids = []
+    val_ids = []
+    test_ids = []
+
+    for patient_id in patient_files:
+
+        if patient_id not in patient_split:
+            print(f"Patient {patient_id} not found in CSV")
+            continue
+
+        split_group = patient_split[patient_id]
+
+        if split_group == "train":
+            train_ids.append(patient_id)
+
+        elif split_group == "val":
+            val_ids.append(patient_id)
+
+        elif split_group == "test":
+            test_ids.append(patient_id)
+
+    print(
+        f"Train IDs: {len(train_ids)}, Validation IDs: {len(val_ids)}, Test IDs: {len(test_ids)}"
+    )
+
+    # start copying files and keep track of how many are copied vs skipped
+    total_copied = 0
+    total_skipped = 0
+
+    for group, ids, target_dir in [
+        ("Train", train_ids, train_dir),
+        ("Validation", val_ids, val_dir),
+        ("Test", test_ids, test_dir),
+    ]:
+
+        print(f"\nCopying {group} images...")
+        group_copied = 0
+
+        for patient_id in ids:
+            for file in patient_files[patient_id]:
+
+                src_path = os.path.join(source_dir, file)
+                dest_path = os.path.join(target_dir, file)
+
+                if not os.path.exists(dest_path):
+                    shutil.copy(src_path, dest_path)
+                    total_copied += 1
+                    group_copied += 1
+                else:
+                    total_skipped += 1
+
+                if total_copied % 1000 == 0 and total_copied > 0:
+                    print(f"{total_copied} images copied so far...")
+
+        print(f"{group} completed. Newly copied: {group_copied}")
+
+    print(f"\nDone. Total copied: {total_copied}, total skipped: {total_skipped}")
+
 
 
 def split_data_and_copy_images_registration_dataset(
@@ -278,7 +426,8 @@ def split_data_and_copy_images(
     copy_files(test_ids, test_dir, "Test")
 
 
-def split_data_and_copy_images_csaw_risk(
+# Function for CSAW dataset split. 
+def split_data_and_copy_images_risk_csaw(
     df,
     source_dir,
     train_dir,
@@ -321,3 +470,41 @@ def split_data_and_copy_images_csaw_risk(
         # Copy the image to the target directory
         shutil.copy(src_path, dest_path)
         print(f"Copied {image_filename} to {target_dir}")
+
+
+
+if __name__ == "__main__":
+
+    # ====================================== EMBED dataset split ======================================
+
+    # Path to the CSV file containing patient_id and split_group
+    csv_file = "/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_csv/EMBED_combined_cases_with_followup_with_split.csv"
+
+    # Directory containing all PNG images
+    source_dir = "/mnt/cv_data/users/mengxu/EMBED_PNG_FILES"
+
+    # Directory for EMBED dataset splits
+    embed_split_dir = "/mnt/cv_data/users/mengxu/EMBED_Dataset_Split"
+    os.makedirs(embed_split_dir, exist_ok=True)
+
+    # Output directories for each dataset split
+    train_dir = os.path.join(embed_split_dir, "train")
+    val_dir = os.path.join(embed_split_dir, "val")
+    test_dir = os.path.join(embed_split_dir, "test")
+
+    print("Starting dataset split and copy process...")
+    print(f"Source directory: {source_dir}")
+    print(f"CSV file: {csv_file}")
+
+    split_data_and_copy_images_risk_embed(
+        csv_file,
+        source_dir,
+        train_dir,
+        val_dir,
+        test_dir,
+    )
+
+    print("Dataset split completed.")
+    
+
+    # ====================================== CSAW dataset split ======================================

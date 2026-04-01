@@ -74,10 +74,15 @@ def resize_with_alignment(image, target_width, target_height, align="L"):
     return result
 
 
+# 
 def preprocess_mammogram_with_largest_contour(csv_file, output_path, positive_group):
     """
     Process mammography DICOM files from a CSV, extract breast area using contour detection,
     resize and save them as 16-bit PNGs.
+    Args:
+        csv_file (str): Path to the input CSV file containing DICOM paths and metadata.
+        output_path (str): Directory where processed PNG images will be saved.
+        positive_group (bool): Flag indicating whether the CSV corresponds to the positive group (True) or negative group (False).
     """
     if not os.path.isdir(output_path):
         os.makedirs(output_path, exist_ok=True)
@@ -92,12 +97,24 @@ def preprocess_mammogram_with_largest_contour(csv_file, output_path, positive_gr
             dicom_path = row["file_path_dcm"]
             view = row["view"]
             label = row["Label"]
+
+            # For cancer patients, we want to differentiate between each of their exams with and without cancer
+            if label == "Cancer":
+                status_tag = "pos_cancer"
+            elif label == "Non-Cancer":
+                status_tag = "pos_nocancer"
+            else:
+                print(f"Skipping {dicom_path}: unexpected Label value {label}")
+                continue
+
         else:
-            dicom_path = row["anon_dicom_path"]
-            patient_id = row["empi_anon"]
+            patient_id = row["patient_id"]
             study_date = row["study_date_anon"]
             laterality = row["ImageLateralityFinal"]
-            view = row["ViewPosition"]
+            dicom_path = row["file_path_dcm"]
+            view = row["view"]
+            # note that there does not exist "neg_cancer" in the negative group, so we can directly assign the tag here
+            status_tag = "neg_nocancer" 
 
         if not os.path.exists(dicom_path):
             print(f"Skipping {dicom_path}, file not found.")
@@ -137,12 +154,54 @@ def preprocess_mammogram_with_largest_contour(csv_file, output_path, positive_gr
         study_date_str = pd.to_datetime(study_date).strftime("%Y-%m-%d")
         last_4_numbers = os.path.basename(dicom_path).split(".")[-2][-4:]
 
-        if positive_group:
-            filename = f"{patient_id}_{laterality}_{view}_{study_date_str}_{last_4_numbers}_{label}.png"
-        else:
-            filename = f"{patient_id}_{laterality}_{view}_{study_date_str}_{last_4_numbers}.png"
+        filename = f"{patient_id}_{laterality}_{view}_{study_date_str}_{last_4_numbers}_{status_tag}.png"
 
         png_path = os.path.join(output_path, filename)
         final_image.save(png_path)
 
         print(f"Processed {os.path.basename(dicom_path)} and saved as {png_path}")
+
+
+# Newly added main method to process both positive and negative groups based on the provided CSV files. 
+if __name__ == "__main__":
+
+    # ========================   CSV files ======================== 
+    positive_csv = "/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_csv/POSITIVE_GROUP_FINAL.csv"
+    negative_csv = "/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_csv/NEGATIVE_GROUP_FINAL.csv"
+
+    # print the number of unique patients, cases, and images in each CSV file before processing
+
+    df_pos = pd.read_csv(positive_csv)
+    df_neg = pd.read_csv(negative_csv)
+    
+    def get_stats(df):
+        print(f"# Patients: {df.patient_id.nunique()}\n")
+        print(f"# Cases: {df.exam_id.nunique()}\n")
+        print(f"# Images: {df.file_path_dcm.nunique()}\n")  
+
+    print("Positive group stats:")
+    get_stats(df_pos)
+    print("Negative group stats:")
+    get_stats(df_neg)
+
+    # ========================  Output directories (same for both groups) ======================== 
+    output_dir = "/mnt/cv_data/users/mengxu/EMBED_PNG_FILES"
+
+    # Create directory if it does not exist
+    os.makedirs(output_dir, exist_ok=True)
+
+    print("Processing POSITIVE group...")
+    preprocess_mammogram_with_largest_contour(
+        csv_file=positive_csv,
+        output_path=output_dir,
+        positive_group=True
+    )
+
+    print("Processing NEGATIVE group...")
+    preprocess_mammogram_with_largest_contour(
+        csv_file=negative_csv,
+        output_path=output_dir,
+        positive_group=False
+    )
+
+    print("All preprocessing finished.")

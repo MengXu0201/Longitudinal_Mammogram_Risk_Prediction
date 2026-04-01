@@ -1,6 +1,9 @@
 import argparse
 import random
+import os
+import torch
 from torch.utils.data import DataLoader
+import numpy as np
 
 from src.dataloaders.risk_prediction.dataset_csaw import  BreastCancerRiskDatasetCSAWCC
 from src.dataloaders.risk_prediction.dataset_embed import  BreastCancerRiskDataset
@@ -17,7 +20,7 @@ def parse_arguments():
     parser.add_argument("--path_test_folder", type=str, required=True, help="Output folder for test results.")
 
     # Training ID and epochs
-    parser.add_argument("--id_training", type=int, required=True, help="ID of training run.")
+    parser.add_argument("--id_training", type=str, required=True, help="ID of training run.")
     parser.add_argument("--num_epoch", type=int, required=True, help="Number of epochs (used to decide model path).")
 
     # Dataset
@@ -32,7 +35,7 @@ def parse_arguments():
     # Loader settings
     parser.add_argument("--batch_size", default=1, type=int)
     parser.add_argument("--num_workers", default=0, type=int)
-    parser.add_argument("--schuffle", default=False, type=bool)
+    parser.add_argument("--shuffle", default=False, type=bool)
     parser.add_argument("--pin_memory", default=True, type=bool)
     parser.add_argument("--seed", default=2023, type=int)
 
@@ -64,7 +67,7 @@ def main():
     )
 
     # Determine model path
-    if args.early_stop:
+    if args.early_stop == "True":
         model_filename = f"early_stopping_risk_prediction_id-{args.id_training}.pth"
     elif args.num_epoch == 99:
         model_filename = f"model_risk_prediction_training_id_{args.id_training}_last_epoch.pth"
