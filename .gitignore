@@ -3,3 +3,4 @@ output_models/
 wandb/
 output_test_results/
 *.log
+output_csv/
