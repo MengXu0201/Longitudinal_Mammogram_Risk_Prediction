@@ -2,9 +2,9 @@
 
 # Define placeholder variables for paths
 CSV_FILE_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_csv/EMBED_combined_cases_with_followup_with_split.csv"
-DATA_ROOT_PATH="/mnt/cv_data/users/mengxu/EMBED_Dataset_Split" 
-OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_models/risk_prediction_no_alignment"
-TRAINING_ID="embed_balanced_split_no_alignment" 
+DATA_ROOT_PATH="/mnt/cv_data/users/mengxu/EMBED_Split_Cropped_PNG" # use the cropped png files
+OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_models/risk_prediction_no_alignment_cropped"
+TRAINING_ID="embed_balanced_split_no_alignment_cropped" # use the cropped png files
 DATASET="EMBED"  # “CSAW” or "EMBED"
 
 # Create directory if it doesn't exist
