@@ -57,6 +57,7 @@ def test_jointly_feat_alignment_risk(
         out_dir,
         path_logger,
         no_feat_Alignment,
+        seed=None,
 ):
     """
     Evaluate a risk prediction model (with or without feature alignment) on the test set.
@@ -137,15 +138,29 @@ def test_jointly_feat_alignment_risk(
     censoring_dist = get_censoring_dist(event_times, event_observed)
 
     mean_c_index, c_index_ci = bootstrap_c_index(
-        event_times, predictions, event_observed, censoring_dist
+        event_times, predictions, event_observed, censoring_dist, random_state=seed
     )
 
-    auc_summary = bootstrap_auc(event_times, predictions, event_observed)
+    auc_summary = bootstrap_auc(
+        event_times,
+        predictions,
+        event_observed,
+        random_state=None if seed is None else seed + 1000,
+    )
     auc_by_density = bootstrap_auc_by_density(
-        event_times, predictions, event_observed, density_categories
+        event_times,
+        predictions,
+        event_observed,
+        density_categories,
+        random_state=None if seed is None else seed + 2000,
     )
     c_index_by_density = bootstrap_c_index_by_density(
-        event_times, predictions, event_observed, density_categories, censoring_dist
+        event_times,
+        predictions,
+        event_observed,
+        density_categories,
+        censoring_dist,
+        random_state=None if seed is None else seed + 3000,
     )
 
     auc_formatted = {
@@ -162,7 +177,10 @@ def test_jointly_feat_alignment_risk(
 
     if counter > 0 and len(njd_values) > 0:
         mean_njd = test_running_njd_value / counter
-        njd_ci = bootstrap_confidence_interval(np.array(njd_values))
+        njd_ci = bootstrap_confidence_interval(
+            np.array(njd_values),
+            random_state=None if seed is None else seed + 4000,
+        )
         results["NJD"] = {"Mean": mean_njd, "95% CI": njd_ci}
 
     logger.info(f"[RESULTS] Evaluation Summary:\n{results}")
@@ -181,6 +199,7 @@ def test_img_alignment_risk_pred_combined_train(
     path_logger,
     use_img_feat_alignment,
     dataset,
+    seed=None,
 ):
     """
     Evaluate the trained image-level (optionally feature-enhanced) alignment + risk model.
@@ -276,7 +295,10 @@ def test_img_alignment_risk_pred_combined_train(
     print("[INFO] Computing evaluation metrics...")
 
     njd_test = test_running_njd_value / counter
-    njd_ci = bootstrap_confidence_interval(np.array(njd_values))
+    njd_ci = bootstrap_confidence_interval(
+        np.array(njd_values),
+        random_state=None if seed is None else seed + 4000,
+    )
 
     predictions = np.concatenate(predictions, axis=0)
     event_times = np.concatenate(event_times, axis=0)
@@ -285,14 +307,28 @@ def test_img_alignment_risk_pred_combined_train(
 
     censoring_dist = get_censoring_dist(event_times, event_observed)
     mean_c_index, c_index_ci = bootstrap_c_index(
-        event_times, predictions, event_observed, censoring_dist
+        event_times, predictions, event_observed, censoring_dist, random_state=seed
     )
-    auc_summary = bootstrap_auc(event_times, predictions, event_observed)
+    auc_summary = bootstrap_auc(
+        event_times,
+        predictions,
+        event_observed,
+        random_state=None if seed is None else seed + 1000,
+    )
     auc_by_density = bootstrap_auc_by_density(
-        event_times, predictions, event_observed, density_categories
+        event_times,
+        predictions,
+        event_observed,
+        density_categories,
+        random_state=None if seed is None else seed + 2000,
     )
     c_index_by_density = bootstrap_c_index_by_density(
-        event_times, predictions, event_observed, density_categories, censoring_dist
+        event_times,
+        predictions,
+        event_observed,
+        density_categories,
+        censoring_dist,
+        random_state=None if seed is None else seed + 3000,
     )
 
     auc_bootstrap_formatted = {

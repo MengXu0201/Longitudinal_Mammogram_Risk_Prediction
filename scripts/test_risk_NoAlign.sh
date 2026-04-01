@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Define placeholder variables for paths
-CSV_FILE_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_csv/EMBED_combined_cases_with_followup_with_split.csv"
+CSV_FILE_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_csv/EMBED_combined_cases_with_followup_with_split.csv"
 DATA_ROOT_PATH="/mnt/cv_data/users/mengxu/EMBED_Dataset_Split"
-OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_models/risk_prediction_no_alignment" # saved model .pth
-TEST_FOLDER_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_test_results/risk_prediction_no_alignment" # where to save the test results (logs, predictions, and metrics)
+OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_models/risk_prediction_no_alignment" # saved model .pth
+TEST_FOLDER_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_test_results/risk_prediction_no_alignment" # where to save the test results (logs, predictions, and metrics)
 TRAINING_ID="embed_balanced_split_no_alignment"
 DATASET="EMBED"  # “CSAW” or "EMBED"
 

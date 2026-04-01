@@ -48,8 +48,11 @@ def main():
     # Reproducibility
     if args.seed is not None:
         random.seed(args.seed)
+        np.random.seed(args.seed)
         torch.manual_seed(args.seed)
         torch.cuda.manual_seed_all(args.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     dev = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -90,6 +93,7 @@ def main():
             path_logger,
             args.use_img_feat_alignment_way1,
             args.dataset,
+            args.seed,
         )
     else:
         test_jointly_feat_alignment_risk(
@@ -99,6 +103,7 @@ def main():
             args.path_test_folder,
             path_logger,
             args.no_feat_alignment,
+            args.seed,
         )
 
 if __name__ == "__main__":

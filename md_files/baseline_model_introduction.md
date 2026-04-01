@@ -32,11 +32,11 @@ In code, this baseline corresponds to:
 
 From `scripts/train_risk_NoAlign.sh`:
 - CSV file:
-  - `/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_csv/EMBED_combined_cases_with_followup_with_split.csv`
+  - `/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_csv/EMBED_combined_cases_with_followup_with_split.csv`
 - Image root:
   - `/mnt/cv_data/users/mengxu/EMBED_Dataset_Split`
 - Output directory:
-  - `/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_models/risk_prediction_no_alignment`
+  - `/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_models/risk_prediction_no_alignment`
 - Training ID:
   - `embed_balanced_split_no_alignment`
 - Dataset:
@@ -206,8 +206,157 @@ Logging backends:
 5. Train with masked BCE risk objective and monitor C-index/AUC
 6. Save best/early-stop/final checkpoints in output directory
 
-## 10. Practical note
+## 10. Comprehensive Input-to-Output Walkthrough (No-Alignment Baseline)
 
-`main_train_risk_prediction.py` currently references `args.no_feat_Alignment` (capital `A`) when calling `train_val_jointly`, while the parser defines `--no_feat_alignment` (lowercase `a`).
+This section explains, step by step, how one raw sample is transformed into model outputs during training.
 
-If not already patched locally, this mismatch can raise an `AttributeError` at runtime. The intended baseline behavior is clearly the no-alignment path configured by `--no_feat_alignment True`.
+### 10.1 Raw inputs entering the pipeline
+
+There are two primary input sources:
+- A metadata CSV (`EMBED_combined_cases_with_followup_with_split.csv`) containing:
+  - patient identifiers
+  - laterality/view/date
+  - follow-up and event information (`years_last_followup`, `Time_to_Cancer_Years`)
+  - split labels (`train`, `val`, `test`)
+- Preprocessed PNG mammograms in split folders (`train/`, `val/`, `test/`) with names encoding:
+  - patient ID
+  - laterality
+  - view
+  - exam date
+  - status tag
+
+### 10.2 Dataset grouping and pair generation
+
+Inside `BreastCancerRiskDataset`:
+1. Read CSV and standardize key columns (`patient_id`, `ImageLateralityFinal`, `view`, `study_date_anon`).
+2. Scan image filenames and group them by `(patient_id, laterality, view)`.
+3. Sort each group by exam date.
+4. Build adjacent temporal pairs:
+  - previous exam at time `t-1`
+  - current exam at time `t`
+
+Example:
+- Exams for one `(patient, side, view)`: 2018, 2020, 2021
+- Pairs used:
+  - `(2018 -> 2020)`
+  - `(2020 -> 2021)`
+
+So the model learns change/risk progression from consecutive exams.
+
+### 10.3 Per-image preprocessing
+
+For each pair:
+1. Load both PNGs (`previous_image`, `current_image`).
+2. Rescale intensities with `imgunit16` to `[0, 65535]`.
+3. Normalize using fixed statistics:
+  - `x_norm = (x - 7047.99) / 12005.5`
+4. Convert to tensor (single channel initially).
+5. Compute `time_gap = min(abs(year_current - year_previous), 5)`.
+
+At model forward time, each image is expanded to 3 channels by repetition before entering ResNet-18.
+
+### 10.4 Target construction (survival-style multi-horizon labels)
+
+For both current and prior exam rows, dataset builds:
+- `target` / `target_prior`: vectors of length 6
+- `y_mask` / `y_mask_prior`: supervision masks of length 6
+- `event_observed`: 1 if cancer within horizon, else 0
+- `event_times`: event/censor index
+
+Interpretation for 5-year horizon:
+- Indices `0..4`: yearly risk horizons
+- Index `5`: censored/non-cancer slot
+
+Case A: cancer within horizon
+- Let event index be `k`.
+- Set `target[k:] = 1`, then reserve final censored slot with `target[-1] = 0`.
+- Mask supervises up to event index.
+
+Case B: no observed cancer in horizon
+- Set `target[-1] = 1`.
+- Event time becomes censoring index from available follow-up.
+- Mask supervises only observed follow-up range.
+
+This enables training under variable follow-up lengths and censoring.
+
+### 10.5 Batch structure provided to training loop
+
+Each batch from DataLoader includes:
+- images:
+  - `current_image`, `previous_image`
+- temporal info:
+  - `time_gap`
+- supervision:
+  - `target`, `target_prior`
+  - `y_mask`, `y_mask_prior`
+  - `event_times`, `event_observed`
+- metadata:
+  - IDs, density category
+
+### 10.6 No-alignment model forward pass
+
+In `RiskModelNoAlignment`:
+1. Expand grayscale images to 3 channels.
+2. Pass `current_image` and `previous_image` through shared `ResNet18Encoder`.
+3. Send extracted features to `TemporalRiskPredictionWithCumulativeProbLayer_no_alignment`.
+
+Risk head operations:
+1. Global-average-pool current and prior features.
+2. Build three branches:
+  - fused (`[f_cur, f_pri]`)
+  - current-only
+  - prior-only
+3. For each branch, use `CumulativeProbabilityLayer` to generate horizon outputs.
+4. Apply `sigmoid` to obtain probabilities in `[0,1]` for each slot.
+
+Output dictionary:
+- `risk_prediction["pred_fused"]`
+- `risk_prediction["pred_cur"]`
+- `risk_prediction["pred_pri"]`
+
+### 10.7 Loss computation and optimization
+
+Training computes masked BCE on each branch:
+- fused vs `target` with `y_mask`
+- current vs `target` with `y_mask`
+- prior vs `target_prior` with `y_mask_prior`
+
+Total baseline loss:
+- `loss = loss_fused + loss_cur + loss_pri`
+
+Because this is no-alignment baseline:
+- no feature-alignment L2 term
+- no deformation regularization term
+
+Then standard optimization:
+- backpropagation
+- optimizer step (Adam)
+- optional LR scheduler step on validation C-index
+- early stopping based on validation C-index
+
+### 10.8 What output artifacts are produced
+
+During and after training:
+- logs:
+  - local log file in output directory
+  - Weights & Biases run logs
+- checkpoints:
+  - best model (`best_model_risk_prediction_id-<id>.pth`)
+  - early-stop model (if triggered)
+  - final model (`...last_epoch.pth`)
+- validation metrics per epoch:
+  - loss terms
+  - C-index
+  - Year 1..5 AUC
+
+### 10.9 Compact end-to-end summary
+
+Raw split PNG + CSV row  
+-> parse filename and match clinical row  
+-> build adjacent prior/current pair  
+-> normalize images + compute time gap  
+-> construct censored multi-horizon targets/masks  
+-> encode images with shared ResNet18  
+-> predict fused/current/prior cumulative risk probabilities  
+-> compute masked BCE losses  
+-> update weights and save checkpoints/metrics.

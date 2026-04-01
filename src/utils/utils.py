@@ -13,6 +13,27 @@ from sklearn.utils import resample
 from src.utils.c_index import concordance_index_ipcw
 
 
+def _seed_for_iteration(base_seed, iteration, offset=0):
+    """Deterministic per-iteration seed helper for bootstrap routines."""
+    if base_seed is None:
+        return None
+    return int(base_seed) + int(offset) + int(iteration)
+
+
+def _summarize_with_ci(values, alpha=0.05):
+    """
+    Compute mean + percentile CI while ignoring NaN/inf values.
+    Returns (None, (None, None)) if nothing valid remains.
+    """
+    arr = np.asarray(values, dtype=float)
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return (None, (None, None))
+    lower = np.percentile(arr, 100 * alpha / 2)
+    upper = np.percentile(arr, 100 * (1 - alpha / 2))
+    return (float(np.mean(arr)), (float(lower), float(upper)))
+
+
 def get_risk_loss_BCE(pred, y_true, y_mask):
     """
     Compute the Binary Cross-Entropy (BCE) loss for risk prediction with masking.
@@ -70,6 +91,7 @@ def bootstrap_auc_by_density(
     density_categories,
     n_bootstrap=1000,
     alpha=0.05,
+    random_state=None,
 ):
     auc_results_by_density = {
         "A": {f"Year {i + 1}": [] for i in range(5)},
@@ -96,13 +118,19 @@ def bootstrap_auc_by_density(
             )
             continue
 
-        for _ in range(n_bootstrap):
+        for b in range(n_bootstrap):
             # Resample cancer and non-cancer indices separately
             cancer_sample = resample(
-                cancer_indices, replace=True, n_samples=len(cancer_indices)
+                cancer_indices,
+                replace=True,
+                n_samples=len(cancer_indices),
+                random_state=_seed_for_iteration(random_state, b, offset=10000),
             )
             non_cancer_sample = resample(
-                non_cancer_indices, replace=True, n_samples=len(non_cancer_indices)
+                non_cancer_indices,
+                replace=True,
+                n_samples=len(non_cancer_indices),
+                random_state=_seed_for_iteration(random_state, b, offset=20000),
             )
             indices = np.concatenate([cancer_sample, non_cancer_sample])
 
@@ -123,18 +151,9 @@ def bootstrap_auc_by_density(
     for density, auc_results in auc_results_by_density.items():
         auc_summary_by_density[density] = {}
         for year, auc_values in auc_results.items():
-            if len(auc_values) > 0:
-                lower = np.percentile(auc_values, 100 * alpha / 2)
-                upper = np.percentile(auc_values, 100 * (1 - alpha / 2))
-                auc_summary_by_density[density][year] = (
-                    np.mean(auc_values),
-                    (lower, upper),
-                )
-            else:
-                auc_summary_by_density[density][year] = (
-                    None,
-                    (None, None),
-                )  # Handle missing values
+            auc_summary_by_density[density][year] = _summarize_with_ci(
+                auc_values, alpha=alpha
+            )
 
     return auc_summary_by_density
 
@@ -146,6 +165,7 @@ def bootstrap_c_index(
     censoring_dist,
     n_bootstrap=1000,
     alpha=0.05,
+    random_state=None,
 ):
     c_index_scores = []
 
@@ -153,13 +173,19 @@ def bootstrap_c_index(
     cancer_indices = np.where(event_observed == 1)[0]
     non_cancer_indices = np.where(event_observed == 0)[0]
 
-    for _ in range(n_bootstrap):
+    for b in range(n_bootstrap):
         # Stratified resampling
         cancer_sample = resample(
-            cancer_indices, replace=True, n_samples=len(cancer_indices)
+            cancer_indices,
+            replace=True,
+            n_samples=len(cancer_indices),
+            random_state=_seed_for_iteration(random_state, b, offset=30000),
         )
         non_cancer_sample = resample(
-            non_cancer_indices, replace=True, n_samples=len(non_cancer_indices)
+            non_cancer_indices,
+            replace=True,
+            n_samples=len(non_cancer_indices),
+            random_state=_seed_for_iteration(random_state, b, offset=40000),
         )
         # Combine cancer and non-cancer cases
         indices = np.concatenate([cancer_sample, non_cancer_sample])
@@ -178,11 +204,8 @@ def bootstrap_c_index(
         )
         c_index_scores.append(c_index)
 
-    # Compute confidence intervals
-    lower = np.percentile(c_index_scores, 100 * alpha / 2)
-    upper = np.percentile(c_index_scores, 100 * (1 - alpha / 2))
-
-    return np.mean(c_index_scores), (lower, upper)
+    mean_val, ci = _summarize_with_ci(c_index_scores, alpha=alpha)
+    return mean_val, ci
 
 
 def bootstrap_c_index_by_density(
@@ -193,6 +216,7 @@ def bootstrap_c_index_by_density(
     censoring_dist,
     n_bootstrap=1000,
     alpha=0.05,
+    random_state=None,
 ):
     c_index_results_by_density = {density: [] for density in ["A", "B", "C", "D"]}
 
@@ -214,13 +238,19 @@ def bootstrap_c_index_by_density(
             )
             continue
 
-        for _ in range(n_bootstrap):
+        for b in range(n_bootstrap):
             # Bootstrap resampling within the density category
             cancer_sample = resample(
-                cancer_indices, replace=True, n_samples=len(cancer_indices)
+                cancer_indices,
+                replace=True,
+                n_samples=len(cancer_indices),
+                random_state=_seed_for_iteration(random_state, b, offset=50000),
             )
             non_cancer_sample = resample(
-                non_cancer_indices, replace=True, n_samples=len(non_cancer_indices)
+                non_cancer_indices,
+                replace=True,
+                n_samples=len(non_cancer_indices),
+                random_state=_seed_for_iteration(random_state, b, offset=60000),
             )
             indices = np.concatenate([cancer_sample, non_cancer_sample])
 
@@ -241,23 +271,16 @@ def bootstrap_c_index_by_density(
     # Compute mean and confidence intervals for each density
     c_index_summary_by_density = {}
     for density, c_index_values in c_index_results_by_density.items():
-        if len(c_index_values) > 0:
-            lower = np.percentile(c_index_values, 100 * alpha / 2)
-            upper = np.percentile(c_index_values, 100 * (1 - alpha / 2))
-            c_index_summary_by_density[density] = (
-                np.mean(c_index_values),
-                (lower, upper),
-            )
-        else:
-            c_index_summary_by_density[density] = (
-                None,
-                (None, None),
-            )  # Handle missing values
+        c_index_summary_by_density[density] = _summarize_with_ci(
+            c_index_values, alpha=alpha
+        )
 
     return c_index_summary_by_density
 
 
-def bootstrap_confidence_interval(data, num_samples=1000, confidence_level=0.95):
+def bootstrap_confidence_interval(
+    data, num_samples=1000, confidence_level=0.95, random_state=None
+):
     """
     Calculate the confidence interval using bootstrapping.
     :param data: List or numpy array of metric values
@@ -267,9 +290,10 @@ def bootstrap_confidence_interval(data, num_samples=1000, confidence_level=0.95)
     """
     data = np.array(data)
     bootstrapped_means = []
+    rng = np.random.RandomState(random_state) if random_state is not None else np.random
     for _ in range(num_samples):
         # Resample with replacement
-        sample = np.random.choice(data, size=len(data), replace=True)
+        sample = rng.choice(data, size=len(data), replace=True)
         # Calculate the mean of the sample
         bootstrapped_means.append(np.mean(sample))
 
@@ -281,20 +305,31 @@ def bootstrap_confidence_interval(data, num_samples=1000, confidence_level=0.95)
 
 
 def bootstrap_auc(
-    event_times, predictions, event_observed, n_bootstrap=1000, alpha=0.05
+    event_times,
+    predictions,
+    event_observed,
+    n_bootstrap=1000,
+    alpha=0.05,
+    random_state=None,
 ):
     auc_results = {f"Year {i + 1}": [] for i in range(5)}
 
     cancer_indices = np.where(event_observed == 1)[0]
     non_cancer_indices = np.where(event_observed == 0)[0]
 
-    for _ in range(n_bootstrap):
+    for b in range(n_bootstrap):
         # Resample while keeping class balance
         cancer_sample = resample(
-            cancer_indices, replace=True, n_samples=len(cancer_indices)
+            cancer_indices,
+            replace=True,
+            n_samples=len(cancer_indices),
+            random_state=_seed_for_iteration(random_state, b, offset=70000),
         )
         non_cancer_sample = resample(
-            non_cancer_indices, replace=True, n_samples=len(non_cancer_indices)
+            non_cancer_indices,
+            replace=True,
+            n_samples=len(non_cancer_indices),
+            random_state=_seed_for_iteration(random_state, b, offset=80000),
         )
         # Combine cancer and resampled non-cancer cases
         indices = np.concatenate([cancer_sample, non_cancer_sample])
@@ -314,9 +349,7 @@ def bootstrap_auc(
     # Calculate mean and confidence intervals for each year
     auc_summary = {}
     for year, auc_values in auc_results.items():
-        lower = np.percentile(auc_values, 100 * alpha / 2)
-        upper = np.percentile(auc_values, 100 * (1 - alpha / 2))
-        auc_summary[year] = (np.mean(auc_values), (lower, upper))
+        auc_summary[year] = _summarize_with_ci(auc_values, alpha=alpha)
 
     return auc_summary
 
@@ -361,7 +394,7 @@ def compute_auc_x_year_auc(probs, censor_times, golds):
             )
         except Exception as e:
             warnings.warn("Failed to calculate AUC because {}".format(e))
-            auc = "NA"
+            auc = np.nan
         aucs_per_year[followup] = auc
 
     return aucs_per_year
