@@ -1,2 +1,5 @@
 output_test_results/
 output_models/
+wandb/
+output_test_results/
+*.log
