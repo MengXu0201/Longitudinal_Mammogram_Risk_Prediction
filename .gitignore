@@ -1,6 +1,9 @@
 output_test_results/
 output_models/
 wandb/
-output_test_results/
 *.log
 output_csv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+md_files/
