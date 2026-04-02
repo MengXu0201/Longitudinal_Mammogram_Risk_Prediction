@@ -166,8 +166,8 @@ def preprocess_mammogram_with_largest_contour(csv_file, output_path, positive_gr
 if __name__ == "__main__":
 
     # ========================   CSV files ======================== 
-    positive_csv = "/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_csv/POSITIVE_GROUP_FINAL.csv"
-    negative_csv = "/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Alignment/output_csv/NEGATIVE_GROUP_FINAL.csv"
+    positive_csv = "/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_csv/POSITIVE_GROUP_FINAL.csv"
+    negative_csv = "/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_csv/NEGATIVE_GROUP_FINAL.csv"
 
     # print the number of unique patients, cases, and images in each CSV file before processing
 

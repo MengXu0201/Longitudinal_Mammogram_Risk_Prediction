@@ -55,11 +55,39 @@ def normalize_to_uint8(image):
     return (normalized * 255).astype(np.uint8)
 
 
+def extract_laterality_from_filename(image_path):
+    """
+    Extract laterality from the EMBED PNG filename format:
+    patientid_laterality_view_date_suffix_status.png
+    """
+    parts = image_path.stem.split("_")
+
+    if len(parts) < 2:
+        return None
+
+    laterality = parts[1].upper()
+    if laterality in {"L", "R"}:
+        return laterality
+
+    return None
+
+
 def find_breast_bounding_box(image):
     """
-    Segment the breast region using Otsu thresholding and return the smallest bounding box
-    around the largest connected foreground component.
+    Find the smallest bounding box of the breast region.
+
+    EMBED_Dataset_Split images were already produced with the breast isolated on a zero
+    background, so the most faithful crop is the bounding box of all nonzero pixels.
+    Otsu thresholding is retained only as a fallback in case an image does not follow
+    that convention.
     """
+    nonzero_points = cv2.findNonZero((image > 0).astype(np.uint8))
+
+    if nonzero_points is not None:
+        x, y, width, height = cv2.boundingRect(nonzero_points)
+        if width > 0 and height > 0:
+            return x, y, width, height
+
     image_uint8 = normalize_to_uint8(image)
     _, binary_mask = cv2.threshold(
         image_uint8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
@@ -81,10 +109,11 @@ def find_breast_bounding_box(image):
     return x, y, width, height
 
 
-def resize_with_zero_padding(image, target_height, target_width):
+def resize_with_zero_padding(image, target_height, target_width, laterality=None):
     """
     Resize an image to fit within the target canvas while preserving aspect ratio,
-    then zero-pad the remaining area.
+    then zero-pad the remaining area. The output follows the same left/right alignment
+    convention used in preprocess_img_embed.py.
     """
     source_height, source_width = image.shape[:2]
 
@@ -102,7 +131,13 @@ def resize_with_zero_padding(image, target_height, target_width):
 
     canvas = np.zeros((target_height, target_width), dtype=image.dtype)
     y_offset = (target_height - resized_height) // 2
-    x_offset = (target_width - resized_width) // 2
+
+    if laterality == "L":
+        x_offset = 0
+    elif laterality == "R":
+        x_offset = target_width - resized_width
+    else:
+        x_offset = (target_width - resized_width) // 2
 
     canvas[y_offset:y_offset + resized_height, x_offset:x_offset + resized_width] = resized
     return canvas
@@ -122,7 +157,7 @@ def preserve_embed_bit_depth(image):
     return image.astype(np.uint16)
 
 
-def crop_and_resize_image(image):
+def crop_and_resize_image(image, laterality=None):
     """
     Crop an image to the breast bounding box and resize it onto a padded 1024 x 512 canvas.
     """
@@ -132,7 +167,9 @@ def crop_and_resize_image(image):
     if cropped.size == 0:
         cropped = image
 
-    resized = resize_with_zero_padding(cropped, TARGET_HEIGHT, TARGET_WIDTH)
+    resized = resize_with_zero_padding(
+        cropped, TARGET_HEIGHT, TARGET_WIDTH, laterality=laterality
+    )
     return preserve_embed_bit_depth(resized)
 
 
@@ -159,7 +196,8 @@ def process_split_directory(source_split_dir, output_split_dir):
 
         try:
             image = load_grayscale_image(image_path)
-            processed_image = crop_and_resize_image(image)
+            laterality = extract_laterality_from_filename(image_path)
+            processed_image = crop_and_resize_image(image, laterality=laterality)
 
             if not cv2.imwrite(str(output_path), processed_image):
                 raise ValueError(f"Failed to write image: {output_path}")
