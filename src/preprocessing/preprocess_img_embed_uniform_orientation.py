@@ -317,7 +317,7 @@ if __name__ == "__main__":
     get_stats(df_neg)
 
     # ======================== Output directory ========================
-    output_dir = "/mnt/cv_data/users/mengxu/EMBED_PNG_UniformOrientation"
+    output_dir = "/mnt/cv_data/users/mengxu/EMBED_PNG_Uniform_Orientation"
 
     os.makedirs(output_dir, exist_ok=True)
 

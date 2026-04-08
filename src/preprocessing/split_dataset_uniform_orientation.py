@@ -481,10 +481,10 @@ if __name__ == "__main__":
     csv_file = "/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_csv/EMBED_combined_cases_with_followup_with_split.csv"
 
     # Directory containing all PNG images
-    source_dir = "/mnt/cv_data/users/mengxu/EMBED_PNG_FILES"
+    source_dir = "/mnt/cv_data/users/mengxu/EMBED_PNG_Uniform_Orientation"  
 
     # Directory for EMBED dataset splits
-    embed_split_dir = "/mnt/cv_data/users/mengxu/EMBED_Dataset_Split"
+    embed_split_dir = "/mnt/cv_data/users/mengxu/EMBED_Dataset_Split_Uniform_Orientation"
     os.makedirs(embed_split_dir, exist_ok=True)
 
     # Output directories for each dataset split
