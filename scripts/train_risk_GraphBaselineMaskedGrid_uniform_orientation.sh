@@ -1,9 +1,11 @@
 #!/bin/bash
 
 CSV_FILE_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_csv/EMBED_combined_cases_with_followup_with_split.csv"
-DATA_ROOT_PATH="/mnt/cv_data/users/mengxu/EMBED_Dataset_Split_Uniform_Orientation"
-OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_models/risk_prediction_graph_baseline_masked_grid_uniform_orientation"
-TRAINING_ID="embed_balanced_split_graph_baseline_masked_grid_uniform_orientation"
+DATA_ROOT_PATH="/mnt/cv_data/users/mengxu/EMBED_Split_Cropped_PNG_Uniform_Orientation"
+CACHE_ROOT_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_graph_cache/masked_grid_uniform_orientation"
+FEATURE_CACHE_ROOT_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_feature_cache/resnet18_no_alignment_uniform_orientation_cropped_early_stop"
+OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_models/risk_prediction_graph_baseline_masked_grid_uniform_orientation_cropped"
+TRAINING_ID="embed_balanced_split_graph_baseline_masked_grid_uniform_orientation_cropped"
 DATASET="EMBED"
 
 mkdir -p "$OUTPUT_DIR_PATH"
@@ -11,6 +13,8 @@ mkdir -p "$OUTPUT_DIR_PATH"
 WANDB_MODE=disabled python3 -m src.train.main_train_risk_prediction_graph \
 --csv_file "$CSV_FILE_PATH" \
 --data_root "$DATA_ROOT_PATH" \
+--cache_root "$CACHE_ROOT_PATH" \
+--feature_cache_root "$FEATURE_CACHE_ROOT_PATH" \
 --path_out_dir "$OUTPUT_DIR_PATH" \
 --id_training "$TRAINING_ID" \
 --use_scheduler "True" \

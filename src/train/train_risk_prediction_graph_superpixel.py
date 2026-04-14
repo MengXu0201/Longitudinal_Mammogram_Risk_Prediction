@@ -11,6 +11,13 @@ from src.utils.c_index import get_censoring_dist
 from src.utils.utils import compute_auc_x_year_auc, concordance_index_ipcw, create_logger, get_risk_loss_BCE
 
 
+def _move_graph_to_device(graph_batch, device):
+    return {
+        key: value.to(device) if torch.is_tensor(value) else value
+        for key, value in graph_batch.items()
+    }
+
+
 def train_val_graph_superpixel_baseline(
     train_loader,
     valid_loader,
@@ -27,7 +34,6 @@ def train_val_graph_superpixel_baseline(
     patience_lr_scheduler,
     patience,
     lr_decay,
-    cache_root,
     hidden_dim=512,
     num_graph_layers=2,
 ):
@@ -38,7 +44,6 @@ def train_val_graph_superpixel_baseline(
     logger.info(f"Number of Training Epochs: {num_epochs}")
 
     model_risk = GraphBaselineSuperpixelRiskModel(
-        cache_root=cache_root,
         hidden_dim=hidden_dim,
         num_graph_layers=num_graph_layers,
         num_years=5,
@@ -105,11 +110,9 @@ def train_val_graph_superpixel_baseline(
             torch.cuda.empty_cache()
             counter += 1
 
-            current_image = batch["current_image"].to(device, dtype=torch.float32)
-            prior_image = batch["previous_image"].to(device, dtype=torch.float32)
+            current_graph = _move_graph_to_device(batch["current_graph"], device)
+            previous_graph = _move_graph_to_device(batch["previous_graph"], device)
             time_gap = batch["time_gap"].to(device)
-            current_image_id = batch["current_image_id"]
-            previous_image_id = batch["previous_image_id"]
             event_times_batch = batch["event_times"].to(device, dtype=torch.float32)
             event_observed_batch = batch["event_observed"]
             target = batch["target"]
@@ -117,14 +120,7 @@ def train_val_graph_superpixel_baseline(
             y_mask = batch["y_mask"]
             y_mask_prior = batch["y_mask_prior"]
 
-            outputs = model_risk(
-                current_image,
-                prior_image,
-                time_gap,
-                current_image_id=current_image_id,
-                previous_image_id=previous_image_id,
-                split="train",
-            )
+            outputs = model_risk(current_graph, previous_graph, time_gap)
             pred = outputs["risk_prediction"]
 
             risk_loss_fused = get_risk_loss_BCE(pred["pred_fused"], target, y_mask)
@@ -176,11 +172,9 @@ def train_val_graph_superpixel_baseline(
             for batch in valid_loader:
                 torch.cuda.empty_cache()
 
-                curr_img = batch["current_image"].to(device).float()
-                prior_img = batch["previous_image"].to(device).float()
+                current_graph = _move_graph_to_device(batch["current_graph"], device)
+                previous_graph = _move_graph_to_device(batch["previous_graph"], device)
                 time_gap = batch["time_gap"].to(device)
-                current_image_id = batch["current_image_id"]
-                previous_image_id = batch["previous_image_id"]
                 event_times_batch = batch["event_times"]
                 event_observed_batch = batch["event_observed"]
                 y_mask = batch["y_mask"]
@@ -188,14 +182,7 @@ def train_val_graph_superpixel_baseline(
                 target = batch["target"]
                 target_prior = batch["target_prior"]
 
-                outputs = model_risk(
-                    curr_img,
-                    prior_img,
-                    time_gap,
-                    current_image_id=current_image_id,
-                    previous_image_id=previous_image_id,
-                    split="val",
-                )
+                outputs = model_risk(current_graph, previous_graph, time_gap)
                 risk_preds = outputs["risk_prediction"]
 
                 loss_fused = get_risk_loss_BCE(risk_preds["pred_fused"], target, y_mask)

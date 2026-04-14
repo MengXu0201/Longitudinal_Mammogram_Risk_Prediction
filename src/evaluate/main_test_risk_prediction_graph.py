@@ -6,8 +6,8 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from src.dataloaders.risk_prediction.dataset_csaw import BreastCancerRiskDatasetCSAWCC
-from src.dataloaders.risk_prediction.dataset_embed import BreastCancerRiskDataset
+from src.dataloaders.risk_prediction.dataset_embed_graph import BreastCancerRiskGraphDataset
+from src.dataloaders.risk_prediction.graph_cached_collate import MaskedGridGraphCollator
 from src.evaluate.test_risk_prediction_graph import test_graph_baseline_risk
 
 
@@ -16,6 +16,8 @@ def parse_arguments():
 
     parser.add_argument("--csv_file", type=str, required=True, help="Path to CSV file with data info.")
     parser.add_argument("--data_root", type=str, required=True, help="Path to data root.")
+    parser.add_argument("--cache_root", type=str, required=True, help="Path to cached masked-grid graph metadata.")
+    parser.add_argument("--feature_cache_root", type=str, required=True, help="Path to cached frozen ResNet feature maps.")
     parser.add_argument("--path_out_dir", type=str, required=True, help="Directory for saved models.")
     parser.add_argument("--path_test_folder", type=str, required=True, help="Output folder for test results.")
 
@@ -48,9 +50,16 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print("Creating test dataset...")
-    dataset_cls = BreastCancerRiskDatasetCSAWCC if args.dataset == "CSAW" else BreastCancerRiskDataset
-    test_dataset = dataset_cls(args.csv_file, args.data_root, "test", transforms=None)
+    if args.dataset != "EMBED":
+        raise ValueError("Masked-grid cached graph evaluation is currently implemented for EMBED only.")
+
+    print("Creating graph test dataset...")
+    test_dataset = BreastCancerRiskGraphDataset(args.csv_file, args.data_root, "test")
+    test_collate = MaskedGridGraphCollator(
+        cache_root=args.cache_root,
+        feature_cache_root=args.feature_cache_root,
+        split="test",
+    )
 
     test_loader = DataLoader(
         test_dataset,
@@ -58,6 +67,7 @@ def main():
         num_workers=args.num_workers,
         shuffle=args.shuffle,
         pin_memory=args.pin_memory,
+        collate_fn=test_collate,
     )
 
     if args.early_stop == "True":

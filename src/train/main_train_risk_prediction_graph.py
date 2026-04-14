@@ -2,12 +2,11 @@ import argparse
 import os
 import random
 
-import kornia.augmentation as K
 import torch
 from torch.utils.data import DataLoader
 
-from src.dataloaders.risk_prediction.dataset_csaw import BreastCancerRiskDatasetCSAWCC
-from src.dataloaders.risk_prediction.dataset_embed import BreastCancerRiskDataset
+from src.dataloaders.risk_prediction.dataset_embed_graph import BreastCancerRiskGraphDataset
+from src.dataloaders.risk_prediction.graph_cached_collate import MaskedGridGraphCollator
 from src.train.train_risk_prediction_graph import train_val_graph_baseline
 
 
@@ -16,6 +15,8 @@ def parse_arguments():
 
     parser.add_argument("--csv_file", type=str, required=True, help="Path to CSV file with dataset info")
     parser.add_argument("--data_root", type=str, required=True, help="Root directory of dataset images")
+    parser.add_argument("--cache_root", type=str, required=True, help="Root directory of cached masked-grid graph metadata")
+    parser.add_argument("--feature_cache_root", type=str, required=True, help="Root directory of cached frozen ResNet feature maps")
     parser.add_argument("--path_out_dir", type=str, required=True, help="Output directory for saving models and logs")
     parser.add_argument("--id_training", type=str, required=True, help="Unique training run ID")
     parser.add_argument("--dataset", type=str, default="EMBED", help="Dataset to use (EMBED or CSAW)")
@@ -58,31 +59,24 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if args.augmentations == "True":
-        transforms_img_train = torch.nn.Sequential(
-            K.RandomRotation(degrees=10),
-            K.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
-        )
-        transforms_img_val = None
-    else:
-        transforms_img_train = None
-        transforms_img_val = None
+        raise ValueError("Graph cached training does not support online image augmentations.")
 
-    print(f"Train augmentations: {transforms_img_train}")
+    if args.dataset.upper() != "EMBED":
+        raise ValueError("Masked-grid cached graph dataset is currently implemented for EMBED only.")
 
-    if args.dataset.upper() == "CSAW":
-        train_dataset = BreastCancerRiskDatasetCSAWCC(
-            args.csv_file, args.data_root, "train", transforms=transforms_img_train
-        )
-        validation_dataset = BreastCancerRiskDatasetCSAWCC(
-            args.csv_file, args.data_root, "val", transforms=transforms_img_val
-        )
-    else:
-        train_dataset = BreastCancerRiskDataset(
-            args.csv_file, args.data_root, "train", transforms=transforms_img_train
-        )
-        validation_dataset = BreastCancerRiskDataset(
-            args.csv_file, args.data_root, "val", transforms=transforms_img_val
-        )
+    train_dataset = BreastCancerRiskGraphDataset(args.csv_file, args.data_root, "train")
+    validation_dataset = BreastCancerRiskGraphDataset(args.csv_file, args.data_root, "val")
+
+    train_collate = MaskedGridGraphCollator(
+        cache_root=args.cache_root,
+        feature_cache_root=args.feature_cache_root,
+        split="train",
+    )
+    validation_collate = MaskedGridGraphCollator(
+        cache_root=args.cache_root,
+        feature_cache_root=args.feature_cache_root,
+        split="val",
+    )
 
     train_loader = DataLoader(
         train_dataset,
@@ -90,6 +84,7 @@ def main():
         num_workers=args.num_workers,
         shuffle=args.schuffle,
         pin_memory=args.pin_memory,
+        collate_fn=train_collate,
     )
 
     validation_loader = DataLoader(
@@ -98,6 +93,7 @@ def main():
         num_workers=args.num_workers,
         shuffle=False,
         pin_memory=args.pin_memory,
+        collate_fn=validation_collate,
     )
 
     model_path = f"model_risk_prediction_training_id_{args.id_training}_last_epoch.pth"

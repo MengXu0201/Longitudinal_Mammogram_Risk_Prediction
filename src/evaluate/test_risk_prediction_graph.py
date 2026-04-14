@@ -47,6 +47,13 @@ def _save_results_json(results, out_dir, logger=None, filename="results.json"):
         logger.info(f"[INFO] Results JSON saved to: {results_path}")
 
 
+def _move_graph_to_device(graph_batch, device):
+    return {
+        key: value.to(device) if torch.is_tensor(value) else value
+        for key, value in graph_batch.items()
+    }
+
+
 def test_graph_baseline_risk(
     test_loader,
     device,
@@ -70,14 +77,14 @@ def test_graph_baseline_risk(
         for batch in test_loader:
             torch.cuda.empty_cache()
 
-            img_curr = batch["current_image"].to(device, dtype=torch.float32)
-            img_prev = batch["previous_image"].to(device, dtype=torch.float32)
+            current_graph = _move_graph_to_device(batch["current_graph"], device)
+            previous_graph = _move_graph_to_device(batch["previous_graph"], device)
             time_gap = batch["time_gap"].to(device)
             event_time = batch["event_times"].to(device, dtype=torch.float32)
             event_obs = batch["event_observed"].to(device, dtype=torch.float32)
             density = batch["density"]
 
-            output = model_risk(img_curr, img_prev, time_gap)
+            output = model_risk(current_graph, previous_graph, time_gap)
             risk_pred = output["risk_prediction"]["pred_fused"]
 
             predictions.append(risk_pred.cpu().numpy())

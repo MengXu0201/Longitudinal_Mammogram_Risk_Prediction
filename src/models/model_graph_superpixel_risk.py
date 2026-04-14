@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 
-from src.dataloaders.risk_prediction.superpixel_graph_utils import build_superpixel_graph_batch
-from src.models.model_feat_alignment import ResNet18Encoder
 from src.models.model_graph_superpixel_modules import (
     SuperpixelGraphConvBlock,
     SuperpixelGraphReadout,
@@ -36,20 +34,17 @@ class GraphBaselineSuperpixelRiskHead(nn.Module):
 class GraphBaselineSuperpixelRiskModel(nn.Module):
     """
     No-alignment graph baseline using cached superpixel graph metadata.
-    CNN features remain online and trainable; only graph topology is cached.
+    Frozen ResNet features and graph metadata are loaded before the model forward pass.
     """
 
     def __init__(
         self,
-        cache_root,
         hidden_dim=512,
         num_years=5,
         num_graph_layers=2,
         dropout=0.1,
     ):
         super().__init__()
-        self.cache_root = cache_root
-        self.encoder = ResNet18Encoder()
         self.node_projector = SuperpixelNodeFeatureProjector(
             feature_dim=512,
             coord_dim=2,
@@ -62,14 +57,7 @@ class GraphBaselineSuperpixelRiskModel(nn.Module):
         self.readout = SuperpixelGraphReadout()
         self.risk_head = GraphBaselineSuperpixelRiskHead(hidden_dim=hidden_dim, num_years=num_years)
 
-    def _encode_graph(self, feature_map, image_ids, split):
-        graph_batch = build_superpixel_graph_batch(
-            cache_root=self.cache_root,
-            split=split,
-            image_ids=image_ids,
-            feature_maps=feature_map,
-        )
-
+    def _encode_graph(self, graph_batch):
         node_area = graph_batch["node_area_pixels"]
         max_area = node_area.amax(dim=1, keepdim=True).clamp_min(1.0)
         node_area = node_area / max_area
@@ -91,21 +79,11 @@ class GraphBaselineSuperpixelRiskModel(nn.Module):
         graph_vector = self.readout(node_features, graph_batch["node_mask"])
         return graph_vector, graph_batch
 
-    def forward(self, img_cur, img_pri, time_gap, current_image_id, previous_image_id, split):
-        img_cur_rgb = self._expand_channels(img_cur)
-        img_pri_rgb = self._expand_channels(img_pri)
-
-        f_cur = self.encoder(img_cur_rgb)
-        f_pri = self.encoder(img_pri_rgb)
-
-        g_cur, _ = self._encode_graph(f_cur, current_image_id, split=split)
-        g_pri, _ = self._encode_graph(f_pri, previous_image_id, split=split)
+    def forward(self, current_graph, previous_graph, time_gap):
+        g_cur, _ = self._encode_graph(current_graph)
+        g_pri, _ = self._encode_graph(previous_graph)
 
         risk_out = self.risk_head(g_cur, g_pri, time_gap)
         return {
             "risk_prediction": risk_out,
         }
-
-    @staticmethod
-    def _expand_channels(img):
-        return img if img.shape[1] == 3 else img.repeat(1, 3, 1, 1)

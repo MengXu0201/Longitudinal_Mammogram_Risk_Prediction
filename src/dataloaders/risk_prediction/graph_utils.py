@@ -1,7 +1,86 @@
 from collections import deque
+import os
 
 import torch
 import torch.nn.functional as F
+
+
+def _feature_cache_path(feature_cache_root, split, image_id):
+    stem, _ = os.path.splitext(image_id)
+    return os.path.join(feature_cache_root, split, f"{stem}.resnet18_feature.pt")
+
+
+def _metadata_cache_path(cache_root, split, image_id):
+    stem, _ = os.path.splitext(image_id)
+    return os.path.join(cache_root, split, f"{stem}.masked_grid_graph.pt")
+
+
+def _load_feature_map(feature_cache_root, split, image_id, device):
+    path = _feature_cache_path(feature_cache_root, split, image_id)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"ResNet feature cache not found for {image_id}: {path}")
+
+    payload = torch.load(path, map_location="cpu")
+    feature_map = payload["feature_map"] if isinstance(payload, dict) else payload
+    return feature_map.to(device=device, dtype=torch.float32)
+
+
+def _load_masked_grid_metadata(cache_root, split, image_id):
+    path = _metadata_cache_path(cache_root, split, image_id)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Masked-grid graph metadata not found for {image_id}: {path}")
+    return torch.load(path, map_location="cpu")
+
+
+def build_cached_masked_grid_graph_batch(cache_root, feature_cache_root, split, image_ids, device):
+    """
+    Load cached ResNet feature maps and masked-grid graph metadata.
+
+    Returns:
+        dict with
+        - node_features: (B, Nmax, C)
+        - node_coords: (B, Nmax, 2)
+        - node_mask: (B, Nmax)
+        - adjacency: (B, Nmax, Nmax)
+        - valid_grid_mask: (B, Hf, Wf)
+    """
+    feature_maps = [_load_feature_map(feature_cache_root, split, image_id, device=device) for image_id in image_ids]
+    metadatas = [_load_masked_grid_metadata(cache_root, split, image_id) for image_id in image_ids]
+
+    channels = int(feature_maps[0].shape[0])
+    feat_h = int(feature_maps[0].shape[1])
+    feat_w = int(feature_maps[0].shape[2])
+    max_nodes = max(int(metadata["num_nodes"]) for metadata in metadatas)
+    device = feature_maps[0].device
+    dtype = feature_maps[0].dtype
+
+    node_features_batch = torch.zeros((len(image_ids), max_nodes, channels), dtype=dtype, device=device)
+    node_coords_batch = torch.zeros((len(image_ids), max_nodes, 2), dtype=dtype, device=device)
+    node_mask_batch = torch.zeros((len(image_ids), max_nodes), dtype=torch.bool, device=device)
+    adjacency_batch = torch.zeros((len(image_ids), max_nodes, max_nodes), dtype=dtype, device=device)
+    valid_grid_masks = torch.zeros((len(image_ids), feat_h, feat_w), dtype=torch.bool, device=device)
+
+    for batch_idx, (feature_map, metadata) in enumerate(zip(feature_maps, metadatas)):
+        valid_positions = metadata["valid_grid_positions"].to(device=device, dtype=torch.long)
+        num_nodes = int(valid_positions.shape[0])
+        if num_nodes == 0:
+            raise ValueError(f"Cached masked-grid graph has zero nodes for {image_ids[batch_idx]}")
+
+        node_features = feature_map.permute(1, 2, 0)[valid_positions[:, 0], valid_positions[:, 1]]
+
+        node_features_batch[batch_idx, :num_nodes] = node_features
+        node_coords_batch[batch_idx, :num_nodes] = metadata["node_coords"].to(device=device, dtype=dtype)
+        node_mask_batch[batch_idx, :num_nodes] = True
+        adjacency_batch[batch_idx, :num_nodes, :num_nodes] = metadata["adjacency"].to(device=device, dtype=dtype)
+        valid_grid_masks[batch_idx] = metadata["valid_grid_mask"].to(device=device, dtype=torch.bool)
+
+    return {
+        "node_features": node_features_batch,
+        "node_coords": node_coords_batch,
+        "node_mask": node_mask_batch,
+        "adjacency": adjacency_batch,
+        "valid_grid_mask": valid_grid_masks,
+    }
 
 
 def _largest_connected_component(mask_2d):

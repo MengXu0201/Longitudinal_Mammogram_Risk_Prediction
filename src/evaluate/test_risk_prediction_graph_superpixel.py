@@ -46,22 +46,25 @@ def _save_results_json(results, out_dir, logger=None, filename="results.json"):
         logger.info(f"[INFO] Results JSON saved to: {results_path}")
 
 
+def _move_graph_to_device(graph_batch, device):
+    return {
+        key: value.to(device) if torch.is_tensor(value) else value
+        for key, value in graph_batch.items()
+    }
+
+
 def test_graph_superpixel_baseline_risk(
     test_loader,
     device,
     path_model,
     out_dir,
     path_logger,
-    cache_root,
     seed=None,
 ):
     logger = create_logger(path_logger)
     print("[INFO] Loading trained superpixel graph risk model...")
 
-    model_risk = GraphBaselineSuperpixelRiskModel(
-        cache_root=cache_root,
-        num_years=5,
-    )
+    model_risk = GraphBaselineSuperpixelRiskModel(num_years=5)
     model_risk.load_state_dict(torch.load(path_model, map_location=device))
     model_risk.to(device).eval()
 
@@ -73,21 +76,14 @@ def test_graph_superpixel_baseline_risk(
         for batch in test_loader:
             torch.cuda.empty_cache()
 
-            img_curr = batch["current_image"].to(device, dtype=torch.float32)
-            img_prev = batch["previous_image"].to(device, dtype=torch.float32)
+            current_graph = _move_graph_to_device(batch["current_graph"], device)
+            previous_graph = _move_graph_to_device(batch["previous_graph"], device)
             time_gap = batch["time_gap"].to(device)
             event_time = batch["event_times"].to(device, dtype=torch.float32)
             event_obs = batch["event_observed"].to(device, dtype=torch.float32)
             density = batch["density"]
 
-            output = model_risk(
-                img_curr,
-                img_prev,
-                time_gap,
-                current_image_id=batch["current_image_id"],
-                previous_image_id=batch["previous_image_id"],
-                split="test",
-            )
+            output = model_risk(current_graph, previous_graph, time_gap)
             risk_pred = output["risk_prediction"]["pred_fused"]
 
             predictions.append(risk_pred.cpu().numpy())
