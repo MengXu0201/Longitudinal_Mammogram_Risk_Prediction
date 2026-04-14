@@ -1,6 +1,11 @@
 import time
-import networks
 from PIL import Image
+
+from src.models.MammoRegNet import (
+    AffineTransformer_block,
+    MammoRegNet,
+    SpatialTransformer_block,
+)
 
 from src.utils.utils import *
 from src.train.losses_mammoregnet import  *
@@ -180,14 +185,14 @@ def test(test_loader, device, path_saved_model, path_logger, out_dir):
     logger = create_logger(path_logger)
 
     # Load trained model
-    model = networks.MammoRegNet()
+    model = MammoRegNet()
     model.load_state_dict(torch.load(path_saved_model, map_location=torch.device(device)))
     model = model.to(device)
     model.eval()
 
     # Load transformation blocks
-    spatial_transformer = networks.SpatialTransformer_block(mode="nearest").to(device).eval()
-    affine_transformer = networks.AffineTransformer_block(mode="nearest").to(device).eval()
+    spatial_transformer = SpatialTransformer_block(mode="nearest").to(device).eval()
+    affine_transformer = AffineTransformer_block(mode="nearest").to(device).eval()
 
     # Loss functions
     ncc_loss = NCC().loss

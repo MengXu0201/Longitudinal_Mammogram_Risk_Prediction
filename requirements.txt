@@ -1,1 +1,34 @@
-To be updated later 
+# PyTorch CUDA 13.0 wheels used by the current mammo_align environment.
+# Remove this line and adjust torch/torchvision versions if you want a CPU-only install.
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+# Core numerical / data packages
+numpy==2.2.3
+pandas==2.2.3
+scipy==1.15.2
+matplotlib==3.10.0
+Pillow==11.1.0
+tqdm==4.67.1
+
+# Deep learning
+torch==2.10.0+cu130
+torchvision==0.25.0+cu130
+einops==0.8.1
+kornia==0.8.0
+albumentations==2.0.4
+
+# Medical image / preprocessing
+opencv-python-headless==4.13.0.92
+pydicom==3.0.1
+pylibjpeg==2.1.0
+pylibjpeg-libjpeg==2.3.0
+pylibjpeg-openjpeg==2.5.0
+scikit-image==0.25.2
+
+# Modeling / evaluation
+lifelines==0.30.0
+scikit-learn==1.6.1
+wandb==0.19.7
+
+# Notebook support used in this repo
+ipykernel==7.2.0
