@@ -8,6 +8,11 @@ OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Predictio
 TEST_FOLDER_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_test_results/risk_prediction_graph_baseline_superpixel_uniform_orientation_cropped"
 TRAINING_ID="embed_balanced_split_graph_baseline_superpixel_uniform_orientation_cropped"
 DATASET="EMBED"
+# Select node feature construction here:
+#   superpixel_pool
+#   patch3x3_mean
+#   superpixel_pool_plus_patch3x3
+NODE_FEATURE_MODE="superpixel_pool"
 
 mkdir -p "$OUTPUT_DIR_PATH"
 mkdir -p "$TEST_FOLDER_PATH"
@@ -24,4 +29,5 @@ python3 -m src.evaluate.main_test_risk_prediction_graph_superpixel \
 --batch_size 12 \
 --early_stop "False" \
 --dataset "$DATASET" \
+--node_feature_mode "$NODE_FEATURE_MODE" \
 --seed 2023

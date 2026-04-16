@@ -60,11 +60,12 @@ def test_graph_superpixel_baseline_risk(
     out_dir,
     path_logger,
     seed=None,
+    node_feature_dim=512,
 ):
     logger = create_logger(path_logger)
     print("[INFO] Loading trained superpixel graph risk model...")
 
-    model_risk = GraphBaselineSuperpixelRiskModel(num_years=5)
+    model_risk = GraphBaselineSuperpixelRiskModel(num_years=5, node_feature_dim=node_feature_dim)
     model_risk.load_state_dict(torch.load(path_model, map_location=device))
     model_risk.to(device).eval()
 

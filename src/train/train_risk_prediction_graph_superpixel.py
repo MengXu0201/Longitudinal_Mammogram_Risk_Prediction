@@ -34,6 +34,7 @@ def train_val_graph_superpixel_baseline(
     patience_lr_scheduler,
     patience,
     lr_decay,
+    node_feature_dim=512,
     hidden_dim=512,
     num_graph_layers=2,
 ):
@@ -44,6 +45,7 @@ def train_val_graph_superpixel_baseline(
     logger.info(f"Number of Training Epochs: {num_epochs}")
 
     model_risk = GraphBaselineSuperpixelRiskModel(
+        node_feature_dim=node_feature_dim,
         hidden_dim=hidden_dim,
         num_graph_layers=num_graph_layers,
         num_years=5,
@@ -75,6 +77,7 @@ def train_val_graph_superpixel_baseline(
             "learning_rate": learning_rate,
             "weight_decay": weight_decay,
             "model": model_risk.__class__.__name__,
+            "node_feature_dim": node_feature_dim,
         },
     )
 

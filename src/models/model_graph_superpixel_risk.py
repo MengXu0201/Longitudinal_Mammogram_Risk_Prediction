@@ -39,6 +39,7 @@ class GraphBaselineSuperpixelRiskModel(nn.Module):
 
     def __init__(
         self,
+        node_feature_dim=512,
         hidden_dim=512,
         num_years=5,
         num_graph_layers=2,
@@ -46,7 +47,7 @@ class GraphBaselineSuperpixelRiskModel(nn.Module):
     ):
         super().__init__()
         self.node_projector = SuperpixelNodeFeatureProjector(
-            feature_dim=512,
+            feature_dim=node_feature_dim,
             coord_dim=2,
             extra_dim=1,
             hidden_dim=hidden_dim,

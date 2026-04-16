@@ -5,8 +5,13 @@ DATA_ROOT_PATH="/mnt/cv_data/users/mengxu/EMBED_Split_Cropped_PNG_Uniform_Orient
 CACHE_ROOT_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_graph_cache/superpixel_uniform_orientation"
 FEATURE_CACHE_ROOT_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_feature_cache/resnet18_no_alignment_uniform_orientation_cropped_early_stop"
 OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_models/risk_prediction_graph_baseline_superpixel_uniform_orientation_cropped"
-TRAINING_ID="embed_balanced_split_graph_baseline_superpixel_uniform_orientation_cropped"
+TRAINING_ID="embed_balanced_split_graph_baseline_superpixel_uniform_orientation_cropped_patch3x3_mean"
 DATASET="EMBED"
+# Select node feature construction here:
+#   superpixel_pool
+#   patch3x3_mean
+#   superpixel_pool_plus_patch3x3
+NODE_FEATURE_MODE="patch3x3_mean"
 
 mkdir -p "$OUTPUT_DIR_PATH"
 
@@ -21,4 +26,5 @@ WANDB_MODE=disabled python3 -m src.train.main_train_risk_prediction_graph_superp
 --accumulation_steps 1 \
 --augmentations "False" \
 --dataset "$DATASET" \
+--node_feature_mode "$NODE_FEATURE_MODE" \
 --seed 2023

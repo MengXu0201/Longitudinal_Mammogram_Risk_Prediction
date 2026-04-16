@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from src.dataloaders.risk_prediction.dataset_embed_graph import BreastCancerRiskGraphDataset
 from src.dataloaders.risk_prediction.graph_cached_collate import SuperpixelGraphCollator
+from src.dataloaders.risk_prediction.superpixel_graph_utils import get_node_feature_dim
 from src.evaluate.test_risk_prediction_graph_superpixel import test_graph_superpixel_baseline_risk
 
 
@@ -30,6 +31,12 @@ def parse_arguments():
     parser.add_argument("--num_workers", default=0, type=int)
     parser.add_argument("--shuffle", default=False, type=bool)
     parser.add_argument("--pin_memory", default=True, type=bool)
+    parser.add_argument(
+        "--node_feature_mode",
+        default="superpixel_pool",
+        choices=["superpixel_pool", "patch3x3_mean", "superpixel_pool_plus_patch3x3"],
+        help="How to build node features from cached superpixel metadata and cached feature maps.",
+    )
     parser.add_argument("--seed", default=2023, type=int)
 
     return parser.parse_args()
@@ -59,6 +66,7 @@ def main():
         cache_root=args.cache_root,
         feature_cache_root=args.feature_cache_root,
         split="test",
+        node_feature_mode=args.node_feature_mode,
     )
 
     test_loader = DataLoader(
@@ -82,6 +90,7 @@ def main():
 
     print(f"Model path: {path_model}")
     print(f"Logger path: {path_logger}")
+    print(f"Node feature mode: {args.node_feature_mode}")
 
     test_graph_superpixel_baseline_risk(
         test_loader=test_loader,
@@ -90,6 +99,7 @@ def main():
         out_dir=args.path_test_folder,
         path_logger=path_logger,
         seed=args.seed,
+        node_feature_dim=get_node_feature_dim(args.node_feature_mode),
     )
 
 

@@ -69,10 +69,11 @@ class SuperpixelGraphCollator:
     Collate graph risk samples and load cached superpixel graph tensors.
     """
 
-    def __init__(self, cache_root, feature_cache_root, split):
+    def __init__(self, cache_root, feature_cache_root, split, node_feature_mode="superpixel_pool"):
         self.cache_root = cache_root
         self.feature_cache_root = feature_cache_root
         self.split = split
+        self.node_feature_mode = node_feature_mode
 
     def __call__(self, batch):
         current_image_ids = [sample["current_image_id"] for sample in batch]
@@ -84,6 +85,7 @@ class SuperpixelGraphCollator:
             split=self.split,
             image_ids=current_image_ids,
             device="cpu",
+            node_feature_mode=self.node_feature_mode,
         )
         previous_graph = build_cached_superpixel_graph_batch(
             cache_root=self.cache_root,
@@ -91,6 +93,7 @@ class SuperpixelGraphCollator:
             split=self.split,
             image_ids=previous_image_ids,
             device="cpu",
+            node_feature_mode=self.node_feature_mode,
         )
 
         return {

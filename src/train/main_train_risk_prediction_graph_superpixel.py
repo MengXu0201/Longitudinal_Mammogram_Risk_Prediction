@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 
 from src.dataloaders.risk_prediction.dataset_embed_graph import BreastCancerRiskGraphDataset
 from src.dataloaders.risk_prediction.graph_cached_collate import SuperpixelGraphCollator
+from src.dataloaders.risk_prediction.superpixel_graph_utils import get_node_feature_dim
 from src.train.train_risk_prediction_graph_superpixel import train_val_graph_superpixel_baseline
 
 
@@ -39,6 +40,12 @@ def parse_arguments():
 
     parser.add_argument("--hidden_dim", default=512, type=int, help="Graph hidden dimension")
     parser.add_argument("--num_graph_layers", default=2, type=int, help="Number of graph message-passing layers")
+    parser.add_argument(
+        "--node_feature_mode",
+        default="superpixel_pool",
+        choices=["superpixel_pool", "patch3x3_mean", "superpixel_pool_plus_patch3x3"],
+        help="How to build node features from cached superpixel metadata and cached feature maps.",
+    )
 
     parser.add_argument("--seed", default=2023, type=int, help="Random seed for reproducibility")
 
@@ -71,11 +78,13 @@ def main():
         cache_root=args.cache_root,
         feature_cache_root=args.feature_cache_root,
         split="train",
+        node_feature_mode=args.node_feature_mode,
     )
     validation_collate = SuperpixelGraphCollator(
         cache_root=args.cache_root,
         feature_cache_root=args.feature_cache_root,
         split="val",
+        node_feature_mode=args.node_feature_mode,
     )
 
     train_loader = DataLoader(
@@ -104,6 +113,7 @@ def main():
     print(f"Training on device: {device}")
     print(f"Model will be saved to: {path_out_model}")
     print(f"Log will be saved to: {path_logger}")
+    print(f"Node feature mode: {args.node_feature_mode}")
 
     train_val_graph_superpixel_baseline(
         train_loader=train_loader,
@@ -121,6 +131,7 @@ def main():
         patience_lr_scheduler=args.patience_lr_scheduler,
         patience=args.patience,
         lr_decay=args.lr_decay,
+        node_feature_dim=get_node_feature_dim(args.node_feature_mode),
         hidden_dim=args.hidden_dim,
         num_graph_layers=args.num_graph_layers,
     )
