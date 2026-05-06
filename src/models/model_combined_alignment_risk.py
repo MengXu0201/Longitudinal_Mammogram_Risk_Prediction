@@ -55,12 +55,14 @@ class CombinedAlignmentRiskModel(nn.Module):
 
 
 class RiskModelNoAlignment(nn.Module):
-    def __init__(self, in_channels=512, num_years=5):
+    def __init__(self, in_channels=512, num_years=5, pretrained_encoder_path=None):
         """
         Baseline model without alignment module.
         """
         super().__init__()
         self.encoder = ResNet18Encoder()
+        if pretrained_encoder_path:
+            self.encoder.load_pretrained_encoder(pretrained_encoder_path)
         self.risk_head = TemporalRiskPredictionWithCumulativeProbLayer_no_alignment(num_years)
 
     def forward(self, img_cur, img_pri, time_gap):

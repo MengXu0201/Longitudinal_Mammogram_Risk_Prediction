@@ -11,7 +11,8 @@ DATASET="EMBED"  # “CSAW” or "EMBED"
 mkdir -p "$OUTPUT_DIR_PATH"
 
 # Run the Python script with the specified arguments
-WANDB_MODE=disabled python3 -m src.train.main_train_risk_prediction \
+# WANDB_MODE=disabled 
+python3 -m src.train.main_train_risk_prediction \
 --csv_file "$CSV_FILE_PATH"  \
 --data_root "$DATA_ROOT_PATH" \
 --path_out_dir "$OUTPUT_DIR_PATH" \

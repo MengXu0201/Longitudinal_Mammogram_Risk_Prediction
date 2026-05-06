@@ -6,13 +6,13 @@ CACHE_ROOT_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Predictio
 FEATURE_CACHE_ROOT_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_feature_cache/resnet18_no_alignment_uniform_orientation_cropped_early_stop"
 OUTPUT_DIR_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_models/risk_prediction_graph_baseline_superpixel_uniform_orientation_cropped"
 TEST_FOLDER_PATH="/mnt/cv_data/users/mengxu/Longitudinal_Mammogram_Risk_Prediction/output_test_results/risk_prediction_graph_baseline_superpixel_uniform_orientation_cropped"
-TRAINING_ID="embed_balanced_split_graph_baseline_superpixel_uniform_orientation_cropped"
+TRAINING_ID="embed_balanced_split_graph_baseline_superpixel_uniform_orientation_cropped_patch3x3_mean"
 DATASET="EMBED"
 # Select node feature construction here:
 #   superpixel_pool
 #   patch3x3_mean
 #   superpixel_pool_plus_patch3x3
-NODE_FEATURE_MODE="superpixel_pool"
+NODE_FEATURE_MODE="patch3x3_mean"
 
 mkdir -p "$OUTPUT_DIR_PATH"
 mkdir -p "$TEST_FOLDER_PATH"

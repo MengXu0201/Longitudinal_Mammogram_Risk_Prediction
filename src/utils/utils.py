@@ -54,6 +54,22 @@ def get_risk_loss_BCE(pred, y_true, y_mask):
     return masked_loss
 
 
+def get_masked_binary_accuracy(pred, y_true, y_mask, threshold=0.5):
+    """
+    Compute binary accuracy on the entries selected by ``y_mask``.
+    Returns 0.0 when no valid entries are present.
+    """
+
+    y_mask = y_mask.to(pred.device).float()
+    y_true = y_true.to(pred.device).float()
+    pred_binary = (pred >= threshold).float()
+    correct = ((pred_binary == y_true).float() * y_mask).sum()
+    total = y_mask.sum()
+    if total.item() == 0:
+        return 0.0
+    return (correct / total).item()
+
+
 def normalize_feature_map(feature_map):
     # Min-Max normalization
     mean = feature_map.mean(dim=(1, 2, 3), keepdim=True)  # Mean per channel

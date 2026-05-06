@@ -8,7 +8,9 @@ from tqdm import tqdm
 
 from src.models.model_graph_superpixel_risk import GraphBaselineSuperpixelRiskModel
 from src.utils.c_index import get_censoring_dist
-from src.utils.utils import compute_auc_x_year_auc, concordance_index_ipcw, create_logger, get_risk_loss_BCE
+from src.utils.utils import (compute_auc_x_year_auc, concordance_index_ipcw,
+                             create_logger, get_masked_binary_accuracy,
+                             get_risk_loss_BCE)
 
 
 def _move_graph_to_device(graph_batch, device):
@@ -84,8 +86,10 @@ def train_val_graph_superpixel_baseline(
     wandb.define_metric("epoch", hidden=True)
     for metric in [
         "Training Loss",
+        "Training Accuracy",
         "Training Risk Loss",
         "Training C-index",
+        "Validation Loss",
         "Validation Risk Loss",
         "Validation C-index",
         "Year 1 AUC",
@@ -108,6 +112,7 @@ def train_val_graph_superpixel_baseline(
         running_risk_loss = 0.0
         counter = 0
         all_preds, all_times, all_events = [], [], []
+        train_accuracy_sum = 0.0
 
         for idx, batch in enumerate(train_loader):
             torch.cuda.empty_cache()
@@ -140,6 +145,7 @@ def train_val_graph_superpixel_baseline(
 
             running_loss += total_loss.item()
             running_risk_loss += risk_loss.item()
+            train_accuracy_sum += get_masked_binary_accuracy(pred["pred_fused"], target, y_mask)
             all_preds.append(pred["pred_fused"].detach().cpu().numpy())
             all_times.append(event_times_batch.cpu().numpy())
             all_events.append(event_observed_batch.cpu().numpy())
@@ -152,15 +158,22 @@ def train_val_graph_superpixel_baseline(
 
         avg_loss = running_loss / counter
         avg_risk = running_risk_loss / counter
+        avg_accuracy = train_accuracy_sum / counter
 
         wandb.log(
             {
                 "epoch": epoch,
                 "Training C-index": c_index,
                 "Training Loss": avg_loss,
+                "Training Accuracy": avg_accuracy,
                 "Training Risk Loss": avg_risk,
             }
         )
+
+        logger.info(f"Training Loss: {avg_loss:.4f}")
+        logger.info(f"Training Accuracy: {avg_accuracy:.4f}")
+        logger.info(f"Training Risk Loss: {avg_risk:.4f}")
+        logger.info(f"Training C-index: {c_index:.4f}")
 
         print(f"[Epoch {epoch}] Total Loss: {avg_loss:.4f} | Risk Loss: {avg_risk:.4f}")
 
@@ -207,6 +220,7 @@ def train_val_graph_superpixel_baseline(
             aucs = compute_auc_x_year_auc(predictions, event_times, event_observed)
             for year, auc in aucs.items():
                 print(f"Year {year + 1}: AUC = {auc:.4f}")
+                logger.info(f"Year {year + 1} AUC: {auc:.4f}")
                 wandb.log({f"Year {year + 1} AUC": auc, "epoch": epoch})
 
             censoring_dist = get_censoring_dist(times, events)
@@ -250,6 +264,7 @@ def train_val_graph_superpixel_baseline(
             wandb.log(
                 {
                     "epoch": epoch,
+                    "Validation Loss": valid_loss_avg,
                     "Validation Risk Loss": risk_loss_avg,
                     "Validation C-index": c_index_val,
                 }

@@ -2,15 +2,79 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
-from torchvision.models import ResNet18_Weights, resnet
+from torchvision.models import ResNet18_Weights
+
+
+def _unwrap_checkpoint_state_dict(checkpoint):
+    """
+    Extract the first nested state-dict-like object from a checkpoint payload.
+    """
+    if not isinstance(checkpoint, dict):
+        return checkpoint
+
+    for key in ["encoder_state_dict", "model_state_dict", "state_dict"]:
+        nested = checkpoint.get(key)
+        if isinstance(nested, dict):
+            return nested
+    return checkpoint
+
+
+def extract_encoder_state_dict(checkpoint):
+    """
+    Extract encoder weights from several common checkpoint layouts.
+
+    Supported examples:
+    - encoder-only checkpoints with keys like `features.0.weight`
+    - risk model checkpoints with keys like `encoder.features.0.weight`
+    - MoCo checkpoints with keys like `encoder_q.features.0.weight`
+    """
+    state_dict = _unwrap_checkpoint_state_dict(checkpoint)
+    if not isinstance(state_dict, dict):
+        raise ValueError("Checkpoint does not contain a valid state dict.")
+
+    prefixes = [
+        "module.encoder_q.",
+        "encoder_q.",
+        "module.encoder.",
+        "encoder.",
+        "module.backbone.",
+        "backbone.",
+    ]
+
+    extracted = {}
+    for key, value in state_dict.items():
+        if key.startswith("features."):
+            extracted[key] = value
+            continue
+        for prefix in prefixes:
+            if key.startswith(prefix):
+                extracted[key[len(prefix):]] = value
+                break
+
+    if extracted:
+        return extracted
+
+    # Fall back to exact encoder-only checkpoints.
+    if all(key.startswith("features.") for key in state_dict.keys()):
+        return state_dict
+
+    raise ValueError("Could not extract encoder weights from checkpoint.")
 
 
 # 1. ResNet-18 Encoder for feature extraction
 class ResNet18Encoder(nn.Module):
-    def __init__(self):
+    def __init__(self, weights=ResNet18_Weights.IMAGENET1K_V1):
         super().__init__()
-        resnet = models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+        resnet = models.resnet18(weights=weights)
         self.features = nn.Sequential(*list(resnet.children())[:-2])  # Remove avgpool & fc layers
+
+    def load_pretrained_encoder(self, checkpoint_path, map_location="cpu", strict=True):
+        """
+        Load encoder weights from an encoder-only, downstream, or MoCo checkpoint.
+        """
+        checkpoint = torch.load(checkpoint_path, map_location=map_location)
+        encoder_state_dict = extract_encoder_state_dict(checkpoint)
+        self.load_state_dict(encoder_state_dict, strict=strict)
 
     def forward(self, x):
         """

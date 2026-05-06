@@ -28,7 +28,7 @@ scikit-image==0.25.2
 # Modeling / evaluation
 lifelines==0.30.0
 scikit-learn==1.6.1
-wandb==0.19.7
+wandb==0.26.1
 
 # Notebook support used in this repo
 ipykernel==7.2.0

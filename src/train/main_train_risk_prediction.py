@@ -31,6 +31,7 @@ def parse_arguments():
     parser.add_argument("--no_feat_alignment", type=str, default="False", help="Disable feature alignment if 'True'")
     parser.add_argument("--use_reg_loss", type=str, default="False", help="Use regularization loss if 'True'")
     parser.add_argument("--lambda_regu", type=float, default=0.2, help="Weight for regularization loss")
+    parser.add_argument("--pretrained_encoder_path", type=str, default="", help="Optional encoder checkpoint path for initialization")
 
     parser.add_argument("--patience_lr_scheduler", default=5, type=int, help="Patience epochs for LR scheduler")
     parser.add_argument("--patience", default=15, type=int, help="Patience epochs for early stopping")
@@ -161,6 +162,7 @@ def main():
             args.lambda_regu,
             args.lr_decay,
             args.no_feat_alignment,
+            args.pretrained_encoder_path,
         )
 
 if __name__ == "__main__":

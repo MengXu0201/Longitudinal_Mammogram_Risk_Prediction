@@ -31,6 +31,7 @@ def train_val_jointly(
     lambda_regu,
     lr_decay,
     no_feat_alignment,
+    pretrained_encoder_path="",
 ):
     print("[INFO] Training the network...")
     start_time = time.time()
@@ -40,8 +41,13 @@ def train_val_jointly(
     logger.info(f"Number of Training Epochs: {num_epochs}")
 
     # Initialize model
-    model_cls = RiskModelNoAlignment if no_feat_alignment == "True" else CombinedAlignmentRiskModel
-    model_risk = model_cls(num_years=5).to(device)
+    if no_feat_alignment == "True":
+        model_risk = RiskModelNoAlignment(
+            num_years=5,
+            pretrained_encoder_path=pretrained_encoder_path if pretrained_encoder_path else None,
+        ).to(device)
+    else:
+        model_risk = CombinedAlignmentRiskModel(num_years=5).to(device)
 
     optimizer = torch.optim.Adam(model_risk.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -73,7 +79,7 @@ def train_val_jointly(
     wandb.define_metric("epoch", hidden=True)
     for metric in [
         "Training Loss", "Training Accuracy", "Training Alignment Loss", "Training Risk Loss",
-        "Validation Validation Risk Loss", "Validation Alignment L2 Loss",
+        "Validation Risk Loss", "Validation Alignment L2 Loss",
         "Training C-index", "Validation C-index",
         "Year 1 AUC", "Year 2 AUC", "Year 3 AUC", "Year 4 AUC", "Year 5 AUC"
     ]:
@@ -102,6 +108,7 @@ def train_val_jointly(
 
         counter = 0
         all_preds, all_times, all_events = [], [], []
+        train_accuracy_sum = 0.0
 
         for idx, batch in enumerate(train_loader):
             torch.cuda.empty_cache()
@@ -141,6 +148,7 @@ def train_val_jointly(
 
             risk_loss = risk_loss_fused + risk_loss_cur + risk_loss_pri
             running["risk_loss"] += risk_loss.item()
+            train_accuracy_sum += get_masked_binary_accuracy(pred["pred_fused"], target, y_mask)
 
             # Total loss
             if no_feat_alignment == "True":
@@ -173,14 +181,22 @@ def train_val_jointly(
         avg_loss = running["loss"] / counter
         avg_align = running["alignment_loss"] / counter
         avg_risk = running["risk_loss"] / counter
+        avg_accuracy = train_accuracy_sum / counter
 
         wandb.log({
             "epoch": epoch,
             "Training C-index": c_index,
             "Training Loss": avg_loss,
+            "Training Accuracy": avg_accuracy,
             "Training Alignment Loss": avg_align,
             "Training Risk Loss": avg_risk,
         })
+
+        logger.info(f"Training Loss: {avg_loss:.4f}")
+        logger.info(f"Training Accuracy: {avg_accuracy:.4f}")
+        logger.info(f"Training Alignment Loss: {avg_align:.4f}")
+        logger.info(f"Training Risk Loss: {avg_risk:.4f}")
+        logger.info(f"Training C-index: {c_index:.4f}")
 
         print(f"[Epoch {epoch}] Total Loss: {avg_loss:.4f} | Alignment Loss: {avg_align:.4f} | Risk Loss: {avg_risk:.4f}")
 
@@ -252,6 +268,7 @@ def train_val_jointly(
             aucs = compute_auc_x_year_auc(predictions, event_times, event_observed)
             for year, auc in aucs.items():
                 print(f"Year {year + 1}: AUC = {auc:.4f}")
+                logger.info(f"Year {year + 1} AUC: {auc:.4f}")
                 wandb.log({f"Year {year + 1} AUC": auc, "epoch": epoch})
 
             # Compute validation C-index
@@ -388,7 +405,7 @@ def train_val_jointly_img_alignment(
     wandb.define_metric("epoch", hidden=True)
     for metric in [
         "Training Loss", "Training Accuracy", "Training Alignment Loss", "Training Risk Loss",
-        "Validation Validation Risk Loss", "Validation Alignment L2 Loss",
+        "Validation Risk Loss", "Validation Alignment L2 Loss",
         "Training C-index", "Validation C-index",
         "Year 1 AUC", "Year 2 AUC", "Year 3 AUC", "Year 4 AUC", "Year 5 AUC"
     ]:
@@ -406,8 +423,10 @@ def train_val_jointly_img_alignment(
 
         model_risk.train()
         train_running_risk_loss = 0.0
+        train_running_align_loss = 0.0
         predictions, event_times, event_observed = [], [], []
         counter = 0
+        train_accuracy_sum = 0.0
 
         for idx, batch in enumerate(train_loader):
             counter += 1
@@ -434,8 +453,15 @@ def train_val_jointly_img_alignment(
             risk_loss_cur = get_risk_loss_BCE(risk_pred["pred_cur"], target, y_mask)
             risk_loss_pri = get_risk_loss_BCE(risk_pred["pred_pri"], target_prior, y_mask_prior)
             risk_loss = (risk_loss_fused + risk_loss_cur + risk_loss_pri) / accumulation_steps
+            aligned_prior = outputs["aligned_prior_feature"]
+            current_features = outputs["current_feature"]
+            alignment_loss = alignment_loss_fn(aligned_prior, current_features)
 
             train_running_risk_loss += risk_loss.item() * accumulation_steps
+            train_running_align_loss += alignment_loss.item()
+            train_accuracy_sum += get_masked_binary_accuracy(
+                risk_pred["pred_fused"], target, y_mask
+            )
 
             # Backward + Optimization with Gradient Accumulation
             risk_loss.backward()
@@ -456,13 +482,24 @@ def train_val_jointly_img_alignment(
         censoring_dist = get_censoring_dist(event_times, event_observed)
         c_index = concordance_index_ipcw(event_times, predictions, event_observed, censoring_dist)
         avg_train_loss = train_running_risk_loss / counter
+        avg_train_align_loss = train_running_align_loss / counter
+        avg_train_accuracy = train_accuracy_sum / counter
 
         # Log to WandB
         wandb.log({
+            "Training Loss": avg_train_loss,
+            "Training Accuracy": avg_train_accuracy,
+            "Training Alignment Loss": avg_train_align_loss,
             "Training Risk Loss": avg_train_loss,
             "Training C-index": c_index,
             "epoch": epoch
         })
+
+        logger.info(f"Training Loss: {avg_train_loss:.4f}")
+        logger.info(f"Training Accuracy: {avg_train_accuracy:.4f}")
+        logger.info(f"Training Alignment Loss: {avg_train_align_loss:.4f}")
+        logger.info(f"Training Risk Loss: {avg_train_loss:.4f}")
+        logger.info(f"Training C-index: {c_index:.4f}")
 
         print(f"Epoch {epoch} | Risk Loss: {avg_train_loss:.4f} | C-index: {c_index:.4f}")
 
@@ -522,6 +559,7 @@ def train_val_jointly_img_alignment(
             auc_results = compute_auc_x_year_auc(predictions, event_times, event_observed)
             for year, auc in auc_results.items():
                 print(f"Year {year + 1}: AUC = {auc:.4f}")
+                logger.info(f"Year {year + 1} AUC: {auc:.4f}")
                 wandb.log({f"Year {year + 1} AUC": auc, "epoch": epoch})
 
             # C-index
